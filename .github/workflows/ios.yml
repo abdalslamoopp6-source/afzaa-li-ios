@@ -34,8 +34,19 @@ jobs:
             "webDir": "www"
           }' > capacitor.config.json
           npx cap add ios
-          # ضبط الحد الأدنى للإصدار ليدعم أيفون 12 وما فوق (iOS 14.0)
-          sed -i '' "s/platform :ios, .*/platform :ios, '14.0'/" ios/App/Podfile
+          
+          # كتابة ملف Podfile جديد ومخصص يدعم أيفون 12 وما فوق (iOS 14.0) مباشرة
+          echo "require_relative '../../node_modules/@capacitor/ios/scripts/pods'
+
+          platform :ios, '14.0'
+          use_frameworks!
+
+          install! 'cocoapods', :disable_input_output_paths => true
+
+          target 'App' do
+            capacitor_pods
+          end" > ios/App/Podfile
+
           npx cap sync ios
 
       - name: Build iOS
