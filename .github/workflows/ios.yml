@@ -24,7 +24,7 @@ jobs:
       - name: Prepare web files
         run: |
           mkdir -p www
-          cp index.html www/index.html
+          cp abdalslam.index.html www/index.html
 
       - name: Create Capacitor project
         run: |
