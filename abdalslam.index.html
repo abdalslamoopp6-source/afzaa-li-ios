@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>أفزع لي - تطبيق العميل</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
+body{font-family:Cairo,sans-serif;background:#f8fafc;color:#0f172a}
+#map-container{height:350px;width:100%;border-radius:18px;overflow:hidden}
+.leaflet-container{z-index:1}
+.glow{box-shadow:0 10px 30px rgba(249,115,22,.12)}
+</style>
+</head>
+<body class="min-h-screen max-w-md mx-auto bg-slate-50 border-x border-slate-200 flex flex-col justify-between">
+
+<!-- رسالة الترحيب الحركية (تظهر مرة واحدة فقط للمستخدم) -->
+<div id="introSplash" class="hidden fixed inset-0 z-[10000] bg-white/95 backdrop-blur-md flex-col items-center justify-center p-6 text-center transition-opacity duration-700">
+  <div class="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-tr from-orange-600 to-amber-400 flex items-center justify-center text-4xl font-black text-white shadow-2xl animate-bounce">أ</div>
+  <h1 class="text-2xl font-black text-orange-600 mb-3 animate-pulse">أهلاً بك في تطبيق أفزع لي</h1>
+  <p class="text-xs text-slate-600 max-w-xs leading-6 mb-8">أفضل تطبيق يقدم خدمة طوارئ فورية ومتميزة إذا تعطلت سيارتك أو واجهتك أي مشكلة على الطريق ⚡</p>
+  <button onclick="playSound('click'); closeIntro()" class="bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-3.5 rounded-2xl font-black text-sm text-white shadow-xl hover:scale-105 transition-transform">بدء الاستخدام 🚀</button>
+</div>
+
+<!-- شاشة تسجيل الدخول (تظهر مرة واحدة إذا لم يتم تسجيل الدخول مسبقاً) -->
+<div id="loginScreen" class="hidden fixed inset-0 z-[9999] bg-white flex items-center justify-center p-5">
+  <div class="w-full max-w-md bg-white border border-orange-200 rounded-3xl p-6 shadow-2xl space-y-4">
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-400 flex items-center justify-center text-2xl font-black text-white shadow-lg mb-3">أ</div>
+      <h2 class="text-xl font-black text-orange-600">تسجيل الدخول</h2>
+      <p class="text-[11px] text-slate-500 mt-1">أدخل اسم المستخدم والبريد الإلكتروني للمتابعة</p>
+    </div>
+    <div class="space-y-3">
+      <input id="loginName" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-900 text-xs outline-none focus:border-orange-500" placeholder="👤 اسم المستخدم">
+      <input id="loginEmail" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-900 text-xs outline-none focus:border-orange-500" placeholder="✉️ البريد الإلكتروني">
+      <button onclick="playSound('click'); loginUser()" class="w-full bg-gradient-to-r from-orange-500 to-amber-500 py-4 rounded-2xl font-black text-sm text-white shadow-lg">دخول والمتابعة ✨</button>
+      <p id="loginError" class="text-center text-[10px] text-red-500"></p>
+    </div>
+  </div>
+</div>
+
+<!-- نجاح الطلب -->
+<div id="successModal" class="hidden fixed inset-0 z-[9998] bg-slate-900/40 backdrop-blur-xs items-center justify-center p-5">
+  <div class="w-full max-w-md bg-white border border-emerald-500/50 rounded-3xl p-6 text-center shadow-2xl">
+    <div class="text-5xl mb-3">🎉</div>
+    <h2 class="text-xl font-black text-emerald-600">✨ تم إرسال طلبك بنجاح ✨</h2>
+    <p class="text-sm text-slate-700 mt-4 leading-8">📍 تم إرسال طلبك وموقعك إلى <br><b class="text-orange-600 text-lg">الفني</b><br>بنجاح ✅</p>
+    <button onclick="playSound('click'); closeSuccess()" class="w-full mt-5 bg-emerald-600 py-3.5 rounded-2xl font-black text-sm text-white">حسناً، متابعة الطلب</button>
+  </div>
+</div>
+
+<div class="flex flex-col flex-1 justify-between">
+  <header class="bg-gradient-to-r from-white to-orange-50 p-4 flex items-center justify-between border-b border-orange-100 sticky top-0 z-40 shadow-xs">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-400 flex items-center justify-center font-black text-white">أ</div>
+      <div>
+        <h1 class="font-black text-sm text-orange-600">تطبيق أفزع لي (العميل)</h1>
+        <p class="text-[9px] text-slate-500">اطلب المساعدة في أي وقت عبر السحاب ⚡</p>
+      </div>
+    </div>
+    <button onclick="playSound('click'); toggleNotifications()" class="relative w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-orange-600">
+      <i class="fa-solid fa-bell text-lg"></i>
+      <span id="notificationBadge" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white hidden">0</span>
+    </button>
+  </header>
+
+  <!-- لوحة الإشعارات -->
+  <div id="notificationPanel" class="hidden fixed top-20 left-3 right-3 max-w-md mx-auto z-50 bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden">
+    <div class="p-4 flex justify-between items-center border-b border-slate-100">
+      <b class="text-sm text-orange-600">🔔 الإشعارات</b>
+      <button onclick="playSound('click'); clearNotifications()" class="text-[10px] text-slate-400 hover:text-red-500">مسح الكل</button>
+    </div>
+    <div id="notificationsList" class="max-h-72 overflow-y-auto"></div>
+  </div>
+
+  <main class="p-4 flex-1 pb-24">
+    <!-- الرئيسية -->
+    <section id="homeView" class="space-y-4">
+      <div class="h-44 rounded-3xl overflow-hidden border border-orange-200 glow relative bg-white">
+        <div id="sliderContainer" class="w-full h-full relative">
+          <img src="alpeeng.png" class="slider-img absolute inset-0 w-full h-full object-cover transition-opacity duration-700 opacity-100" alt="Banner 1" onerror="this.src='https://images.unsplash.com/photo-1563720223185-11003d516935?w=600&auto=format&fit=crop'">
+          <img src="IMG-20260806-WA0002.jpg" class="slider-img absolute inset-0 w-full h-full object-cover transition-opacity duration-700 opacity-0" alt="Banner 2" onerror="this.src='https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop'">
+          <img src="opivg.png" class="slider-img absolute inset-0 w-full h-full object-cover transition-opacity duration-700 opacity-0" alt="Banner 3" onerror="this.src='https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=600&auto=format&fit=crop'">
+        </div>
+        <div class="absolute bottom-3 right-3 bg-white/80 px-3 py-1 rounded-full text-[10px] text-orange-600 font-bold backdrop-blur-sm border border-orange-100">خدمات طوارئ فورية ⚡</div>
+      </div>
+
+      <h3 class="font-bold text-xs text-slate-700">⚡ اختر الخدمة المطلوبة:</h3>
+      <div id="services" class="grid grid-cols-3 gap-2.5"></div>
+    </section>
+
+    <!-- تفاصيل الطلب والموقع -->
+    <section id="detailsView" class="hidden space-y-4">
+      <div class="bg-gradient-to-br from-orange-50 to-white border border-orange-200 p-4 rounded-3xl glow">
+        <p id="welcome" class="text-xs text-orange-900"></p>
+      </div>
+      <div class="bg-white border border-slate-200 p-4 rounded-3xl space-y-3 shadow-xs">
+        <button onclick="playSound('click'); gps()" class="w-full bg-blue-600 hover:bg-blue-500 py-3.5 rounded-2xl text-xs font-bold text-white"><i class="fa-solid fa-location-crosshairs"></i> تحديد موقعي تلقائياً GPS</button>
+        <button onclick="playSound('click'); openMap()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3.5 rounded-2xl text-xs font-bold text-white"><i class="fa-solid fa-map-location-dot"></i> تحديد الموقع يدوياً على الخريطة</button>
+        <div id="locationBox" class="hidden bg-emerald-50 border border-emerald-200 p-3 rounded-2xl text-xs text-emerald-800">
+          <i class="fa-solid fa-circle-check"></i> تم تحديد الموقع: <span id="coords"></span>
+        </div>
+      </div>
+      <button onclick="playSound('click'); sendOrder()" class="w-full bg-gradient-to-r from-orange-500 to-amber-500 py-4 rounded-2xl font-black text-sm text-white shadow-xl">✨ تأكيد وإرسال الطلب للفني</button>
+      <button onclick="playSound('click'); showHome()" class="w-full bg-slate-100 hover:bg-slate-200 py-2.5 rounded-2xl text-xs text-slate-600">الرجوع للخدمات</button>
+    </section>
+
+    <!-- طلبات العميل -->
+    <section id="ordersView" class="hidden space-y-3">
+      <h3 class="font-bold text-xs text-orange-600 mb-2">طلباتي النشطة</h3>
+      <div id="clientOrders"></div>
+    </section>
+
+    <!-- الدردشة -->
+    <section id="chatView" class="hidden space-y-3">
+      <div class="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+        <button onclick="playSound('click'); closeChat()" class="text-xs text-slate-500"><i class="fa-solid fa-arrow-right"></i> رجوع</button>
+        <b class="text-xs text-orange-600">💬 الدردشة مع الفني</b>
+        <div></div>
+      </div>
+      <div id="chatMessages" class="space-y-2 p-3 bg-white border border-slate-200 rounded-2xl min-h-[300px] max-h-[400px] overflow-y-auto shadow-inner"></div>
+      <div class="flex gap-2">
+        <input id="chatInput" class="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-orange-500 shadow-xs" placeholder="اكتب رسالتك هنا...">
+        <button onclick="playSound('click'); sendChat()" class="bg-orange-500 hover:bg-orange-600 px-5 rounded-xl text-white font-bold"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 border-t border-slate-200 p-3 flex justify-around z-30 backdrop-blur-md shadow-lg">
+    <button onclick="playSound('click'); switchTab('home')" id="navHome" class="text-orange-600 text-xs flex flex-col items-center gap-1"><i class="fa-solid fa-house text-lg"></i><span>الرئيسية</span></button>
+    <button onclick="playSound('click'); switchTab('orders')" id="navOrders" class="text-slate-400 text-xs flex flex-col items-center gap-1"><i class="fa-solid fa-list-check text-lg"></i><span>طلباتي</span></button>
+  </nav>
+</div>
+
+<!-- Modal الخريطة -->
+<div id="mapModal" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs p-3 flex items-center justify-center">
+  <div class="bg-white w-full max-w-md rounded-3xl p-4 border border-slate-200 shadow-2xl">
+    <h3 class="font-bold text-xs text-orange-600 mb-3">📍 حرّك الدبوس إلى مكان العطل</h3>
+    <div id="map-container"></div>
+    <p class="text-[10px] text-slate-500 mt-2">اسحب الدبوس وضعه بالضبط على مكان العطل.</p>
+    <button onclick="playSound('click'); confirmMap()" class="mt-3 w-full bg-orange-500 py-3 rounded-xl font-bold text-xs text-white">اعتماد هذا الموقع</button>
+    <button onclick="playSound('click'); closeMap()" class="mt-2 w-full bg-slate-100 hover:bg-slate-200 py-2 rounded-xl text-xs text-slate-600">إغلاق</button>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBxQ1vLQLf5GkK2geEYJ9pMMy9a2Vooa0I",
+  authDomain: "abdalslam-6da15.firebaseapp.com",
+  projectId: "abdalslam-6da15",
+  storageBucket: "abdalslam-6da15.firebasestorage.app",
+  messagingSenderId: "73184296137",
+  appId: "1:73184296137:web:0a35a211bea958b85f6118"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// تشغيل وإيقاف الموسيقى التمهيدية
+let bgAudioCtx = null;
+let musicInterval = null;
+
+function startBackgroundMusic() {
+  try {
+    bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [261.63, 329.63, 392.00, 523.25]; // نغمات هادئة متسلسلة
+    let noteIdx = 0;
+    
+    function playNote() {
+      if (!bgAudioCtx) return;
+      const osc = bgAudioCtx.createOscillator();
+      const gainNode = bgAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(notes[noteIdx], bgAudioCtx.currentTime);
+      noteIdx = (noteIdx + 1) % notes.length;
+      
+      gainNode.gain.setValueAtTime(0.01, bgAudioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.04, bgAudioCtx.currentTime + 0.5);
+      gainNode.gain.linearRampToValueAtTime(0.001, bgAudioCtx.currentTime + 1.4);
+      
+      osc.connect(gainNode);
+      gainNode.connect(bgAudioCtx.destination);
+      osc.start();
+      osc.stop(bgAudioCtx.currentTime + 1.4);
+    }
+    
+    playNote();
+    musicInterval = setInterval(playNote, 1400);
+  } catch (e) {}
+}
+
+function stopBackgroundMusic() {
+  if (musicInterval) {
+    clearInterval(musicInterval);
+    musicInterval = null;
+  }
+  if (bgAudioCtx) {
+    bgAudioCtx.close().catch(() => {});
+    bgAudioCtx = null;
+  }
+}
+
+function playSound(type) {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    if (type === 'click') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.08);
+    }
+  } catch (e) {}
+}
+
+function playWelcomeVoice() {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance('أهلاً بك في تطبيق أفزع لي');
+    utterance.lang = 'ar-SA';
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
+function closeIntro() {
+  stopBackgroundMusic(); // إيقاف الموسيقى فور الضغط على بدء الاستخدام
+  localStorage.setItem('afzaaLiIntroShown', 'true'); // حفظ أن الصفحة الترحيبية ظهرت مرة واحدة فقط
+  const intro = document.getElementById('introSplash');
+  intro.style.opacity = '0';
+  setTimeout(() => {
+    intro.style.display = 'none';
+    checkLoginStatus();
+  }, 700);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const introShown = localStorage.getItem('afzaaLiIntroShown');
+  initSlider();
+  
+  if (!introShown) {
+    // تظهر الصفحة الترحيبية والموسيقى أول مرة فقط
+    const intro = document.getElementById('introSplash');
+    intro.style.display = 'flex';
+    startBackgroundMusic();
+    playWelcomeVoice();
+  } else {
+    // إذا ظهرت من قبل، تخطي الصفحة الترحيبية والموسيقى تماماً
+    document.getElementById('introSplash').style.display = 'none';
+    checkLoginStatus();
+  }
+});
+
+let clientProfile = JSON.parse(localStorage.getItem('afzaaLiClientProfile') || 'null');
+
+function checkLoginStatus() {
+  if (!clientProfile) {
+    document.getElementById('loginScreen').style.display = 'flex';
+  } else {
+    document.getElementById('loginScreen').style.display = 'none';
+    startOrdersListener();
+  }
+}
+
+function loginUser() {
+  const name = document.getElementById('loginName').value.trim();
+  const email = document.getElementById('loginEmail').value.trim();
+  const error = document.getElementById('loginError');
+  if (!name) { error.textContent = 'يرجى كتابة اسم المستخدم.'; return; }
+  if (!email || !email.includes('@')) { error.textContent = 'يرجى كتابة بريد إلكتروني صحيح.'; return; }
+  clientProfile = { name, email };
+  localStorage.setItem('afzaaLiClientProfile', JSON.stringify(clientProfile));
+  document.getElementById('loginScreen').style.display = 'none';
+  startOrdersListener();
+}
+
+let currentSlide = 0;
+function initSlider() {
+  const images = document.querySelectorAll('.slider-img');
+  if (!images.length) return;
+  setInterval(() => {
+    images[currentSlide].style.opacity = '0';
+    currentSlide = (currentSlide + 1) % images.length;
+    images[currentSlide].style.opacity = '1';
+  }, 3500);
+}
+
+const services = [
+  ['سطحة ونقل سيارات','fa-truck-pickup'],
+  ['ورشة متنقلة','fa-wrench'],
+  ['فتح وبرمجة المفاتيح','fa-key'],
+  ['توصيل الوقود','fa-gas-pump'],
+  ['إصلاح البنشر','fa-car-side'],
+  ['اشتراك بطارية','fa-car-battery'],
+  ['مغسلة متنقلة','fa-spray-can'],
+  ['نقل المعدات','fa-dolly'],
+  ['نقل الأثاث والعفش','fa-couch'],
+  ['نقل البضائع','fa-boxes-packing'],
+  ['كرين نقل ورفع','fa-truck-moving']
+];
+
+let selectedService = null;
+let locationData = null;
+let map = null, marker = null;
+let activeChatOrderId = null;
+let ordersList = [];
+
+let notifications = JSON.parse(localStorage.getItem('afzaaLiNotifications') || '[]');
+let seenTechnicianMessages = JSON.parse(localStorage.getItem('afzaaLiSeenTechnicianMessages') || '{}');
+let seenOrderStatuses = JSON.parse(localStorage.getItem('afzaaLiSeenOrderStatuses') || '{}');
+
+const servicesGrid = document.getElementById('services');
+services.forEach(([name,icon]) => {
+  let b = document.createElement('button');
+  b.className = 'bg-white border border-slate-200 hover:border-orange-500 rounded-2xl p-3 text-center transition-all shadow-xs';
+  b.innerHTML = `<div class="w-10 h-10 mx-auto mb-2 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-600"><i class="fa-solid ${icon}"></i></div><span class="text-[10px] font-bold text-slate-800">${name}</span>`;
+  b.onclick = () => { playSound('click'); selectService(name); };
+  servicesGrid.appendChild(b);
+});
+
+function selectService(s) {
+  selectedService = s;
+  locationData = null;
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('detailsView').classList.remove('hidden');
+  document.getElementById('welcome').innerHTML = `أهلاً بك في خدمة <b class="text-orange-600">"${escapeHtml(s)}"</b><br>حدد موقع العطل بدقة لإرساله للفني.`;
+  document.getElementById('locationBox').classList.add('hidden');
+}
+
+function showHome() {
+  document.getElementById('detailsView').classList.add('hidden');
+  document.getElementById('homeView').classList.remove('hidden');
+}
+
+function switchTab(tab) {
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('detailsView').classList.add('hidden');
+  document.getElementById('ordersView').classList.add('hidden');
+  document.getElementById('chatView').classList.add('hidden');
+  document.getElementById('navHome').className = 'text-slate-400 text-xs flex flex-col items-center gap-1';
+  document.getElementById('navOrders').className = 'text-slate-400 text-xs flex flex-col items-center gap-1';
+  if (tab === 'home') {
+    document.getElementById('homeView').classList.remove('hidden');
+    document.getElementById('navHome').className = 'text-orange-600 text-xs flex flex-col items-center gap-1';
+  }
+  if (tab === 'orders') {
+    document.getElementById('ordersView').classList.remove('hidden');
+    document.getElementById('navOrders').className = 'text-orange-600 text-xs flex flex-col items-center gap-1';
+  }
+}
+
+function gps() {
+  if (!navigator.geolocation) { showMsg('المتصفح لا يدعم تحديد الموقع'); return; }
+  navigator.geolocation.getCurrentPosition(
+    p => {
+      locationData = { lat: p.coords.latitude, lng: p.coords.longitude };
+      updateLocationUI();
+    },
+    () => { showMsg('تعذر تحديد الموقع حالياً.'); },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+function showMsg(t) {
+  const d = document.createElement('div');
+  d.className = 'fixed top-20 left-4 right-4 max-w-md mx-auto z-[100] bg-white border border-orange-300 rounded-2xl p-4 text-xs text-orange-800 shadow-2xl text-center';
+  d.innerHTML = `<div class="text-2xl mb-2">📍</div><b>تنبيه</b><br><span class="text-slate-700">${escapeHtml(t)}</span>`;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 4000);
+}
+
+function updateLocationUI() {
+  if (!locationData) return;
+  document.getElementById('locationBox').classList.remove('hidden');
+  document.getElementById('coords').textContent = `${locationData.lat.toFixed(6)}, ${locationData.lng.toFixed(6)}`;
+}
+
+function openMap() {
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('detailsView').classList.remove('hidden');
+  document.getElementById('mapModal').classList.remove('hidden');
+  setTimeout(() => {
+    let center = locationData ? [locationData.lat, locationData.lng] : [15.3694, 44.1910];
+    if (!map) {
+      map = L.map('map-container').setView(center, 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+      marker = L.marker(center, { draggable: true }).addTo(map);
+      marker.on('dragend', () => {
+        let p = marker.getLatLng();
+        locationData = { lat: p.lat, lng: p.lng };
+        updateLocationUI();
+      });
+      map.on('click', e => {
+        marker.setLatLng(e.latlng);
+        locationData = { lat: e.latlng.lat, lng: e.latlng.lng };
+        updateLocationUI();
+      });
+    } else {
+      map.invalidateSize();
+      map.setView(center, 16);
+      marker.setLatLng(center);
+    }
+  }, 300);
+}
+
+function closeMap() {
+  document.getElementById('mapModal').classList.add('hidden');
+}
+
+function confirmMap() {
+  if (!locationData) { showMsg('📍 حرّك الدبوس أولاً إلى مكان العطل'); return; }
+  document.getElementById('mapModal').classList.add('hidden');
+  updateLocationUI();
+}
+
+async function sendOrder() {
+  if (!selectedService) { showMsg('يرجى اختيار الخدمة أولاً'); return; }
+  if (!locationData) {
+    showMsg('جاري جلب موقعك عبر GPS... 📍');
+    navigator.geolocation.getCurrentPosition(
+      async p => {
+        locationData = { lat: p.coords.latitude, lng: p.coords.longitude };
+        updateLocationUI();
+        await executeOrderSending();
+      },
+      () => { showMsg('يرجى تحديد الموقع يدوياً.'); },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+    return;
+  }
+  await executeOrderSending();
+}
+
+async function executeOrderSending() {
+  const o = {
+    id: Date.now(),
+    clientName: clientProfile ? clientProfile.name : 'عميل بدون تسجيل',
+    clientEmail: clientProfile ? clientProfile.email : '',
+    service: selectedService,
+    lat: Number(locationData.lat),
+    lng: Number(locationData.lng),
+    status: 'بانتظار قبول الفني',
+    time: new Date().toLocaleTimeString('ar'),
+    messages: []
+  };
+  try {
+    await db.collection('orders').add(o);
+    document.getElementById('successModal').style.display = 'flex';
+    locationData = null;
+    selectedService = null;
+  } catch (err) {
+    showMsg('حدث خطأ في إرسال الطلب');
+  }
+}
+
+function closeSuccess() {
+  document.getElementById('successModal').style.display = 'none';
+  switchTab('orders');
+}
+
+function startOrdersListener() {
+  db.collection('orders').orderBy('id', 'desc').onSnapshot(snapshot => {
+    let newList = [];
+    snapshot.forEach(doc => { newList.push({ docId: doc.id, ...doc.data() }); });
+    ordersList = newList;
+    ordersList.forEach(order => {
+      checkNewMessages(order);
+      checkOrderStatusChange(order);
+    });
+    renderClientOrders();
+    updateNotificationUI();
+    if (activeChatOrderId) renderMessages();
+  });
+}
+
+function addNotification(title, text, orderId) {
+  notifications.unshift({ id: Date.now() + Math.random(), title, text, orderId, time: new Date().toLocaleTimeString('ar', {hour:'2-digit', minute:'2-digit'}), read: false });
+  if (notifications.length > 30) notifications.pop();
+  localStorage.setItem('afzaaLiNotifications', JSON.stringify(notifications));
+  updateNotificationUI();
+}
+
+function updateNotificationUI() {
+  const badge = document.getElementById('notificationBadge');
+  const list = document.getElementById('notificationsList');
+  if (!badge || !list) return;
+  const unread = notifications.filter(n => !n.read).length;
+  badge.textContent = unread;
+  badge.classList.toggle('hidden', unread === 0);
+
+  if (!notifications.length) {
+    list.innerHTML = `<div class="p-8 text-center text-xs text-slate-400">لا توجد إشعارات</div>`;
+    return;
+  }
+  list.innerHTML = notifications.map(n => `
+    <button onclick="openNotification('${n.id}')" class="w-full text-right p-3 border-b border-slate-100 hover:bg-orange-50/50 ${!n.read ? 'bg-orange-50/70':''}">
+      <b class="text-xs text-slate-900 block">${escapeHtml(n.title)}</b>
+      <p class="text-[10px] text-slate-600 mt-1">${escapeHtml(n.text)}</p>
+      <span class="text-[8px] text-slate-400 block mt-1">${escapeHtml(n.time)}</span>
+    </button>
+  `).join('');
+}
+
+function toggleNotifications() {
+  document.getElementById('notificationPanel').classList.toggle('hidden');
+}
+
+function openNotification(id) {
+  const n = notifications.find(x => String(x.id) === String(id));
+  if (!n) return;
+  n.read = true;
+  localStorage.setItem('afzaaLiNotifications', JSON.stringify(notifications));
+  document.getElementById('notificationPanel').classList.add('hidden');
+  updateNotificationUI();
+  if (n.orderId) openChat(n.orderId);
+}
+
+function clearNotifications() {
+  notifications = [];
+  localStorage.setItem('afzaaLiNotifications', JSON.stringify(notifications));
+  updateNotificationUI();
+}
+
+function checkNewMessages(order) {
+  if (!order.messages) return;
+  order.messages.forEach((m, idx) => {
+    if (m.sender === 'provider') {
+      const key = order.docId + '_' + idx;
+      if (!seenTechnicianMessages[key]) {
+        seenTechnicianMessages[key] = true;
+        localStorage.setItem('afzaaLiSeenTechnicianMessages', JSON.stringify(seenTechnicianMessages));
+        addNotification('💬 رسالة جديدة من الفني', m.text, order.docId);
+      }
+    }
+  });
+}
+
+function checkOrderStatusChange(order) {
+  const statusKey = order.docId + '_' + order.status;
+  if (order.status === 'مقبول وجاري التنفيذ' && !seenOrderStatuses[statusKey]) {
+    seenOrderStatuses[statusKey] = true;
+    localStorage.setItem('afzaaLiSeenOrderStatuses', JSON.stringify(seenOrderStatuses));
+    addNotification('✅ تم قبول الطلب!', `قام الفني بقبول طلب "${order.service}". الحالة الآن: مقبول وجاري التنفيذ 🛠️`, order.docId);
+  }
+}
+
+function renderClientOrders() {
+  const container = document.getElementById('clientOrders');
+  if (!container) return;
+  if (!ordersList.length) {
+    container.innerHTML = `<div class="text-center text-slate-400 py-16 text-xs">لا توجد طلبات سابقة</div>`;
+    return;
+  }
+  container.innerHTML = ordersList.map(o => `
+    <div class="bg-white border border-slate-200 rounded-3xl p-4 mb-3 space-y-2 shadow-xs">
+      <div class="flex justify-between items-center">
+        <b class="text-xs text-orange-600">${escapeHtml(o.service)}</b>
+        <span class="text-[10px] px-2.5 py-1 rounded-full ${o.status === 'بانتظار قبول الفني' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${escapeHtml(o.status)}</span>
+      </div>
+      <p class="text-[10px] text-slate-500">📍 الإحداثيات: ${Number(o.lat).toFixed(6)}, ${Number(o.lng).toFixed(6)}</p>
+      <button onclick="playSound('click'); openChat('${o.docId}')" class="w-full mt-2 bg-slate-100 hover:bg-slate-200 py-2.5 rounded-xl text-xs font-bold text-orange-700 flex items-center justify-center gap-2">
+        <i class="fa-solid fa-comments"></i> محادثة الفني
+      </button>
+    </div>
+  `).join('');
+}
+
+function openChat(docId) {
+  activeChatOrderId = docId;
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('detailsView').classList.add('hidden');
+  document.getElementById('ordersView').classList.add('hidden');
+  document.getElementById('chatView').classList.remove('hidden');
+  document.getElementById('notificationPanel').classList.add('hidden');
+  renderMessages();
+}
+
+function closeChat() {
+  activeChatOrderId = null;
+  document.getElementById('chatView').classList.add('hidden');
+  switchTab('orders');
+}
+
+function renderMessages() {
+  const o = ordersList.find(x => x.docId === activeChatOrderId);
+  if (!o) return;
+  const msgBox = document.getElementById('chatMessages');
+  if (!o.messages || !o.messages.length) {
+    msgBox.innerHTML = `<div class="text-center text-slate-400 py-10 text-xs">لا توجد رسائل بعد.</div>`;
+    return;
+  }
+  msgBox.innerHTML = o.messages.map(m => `
+    <div class="flex ${m.sender === 'client' ? 'justify-end' : 'justify-start'}">
+      <div class="max-w-[80%] p-3 rounded-2xl text-xs ${m.sender === 'client' ? 'bg-orange-600 text-white rounded-bl-none' : 'bg-slate-100 text-slate-800 rounded-br-none border border-slate-200'}">
+        <p>${escapeHtml(m.text)}</p>
+        <span class="text-[8px] opacity-70 block mt-1 text-left">${m.time}</span>
+      </div>
+    </div>
+  `).join('');
+  msgBox.scrollTop = msgBox.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !activeChatOrderId) return;
+  const o = ordersList.find(x => x.docId === activeChatOrderId);
+  if (!o) return;
+  const newMsg = { sender: 'client', text, time: new Date().toLocaleTimeString('ar', {hour:'2-digit', minute:'2-digit'}) };
+  const updated = o.messages ? [...o.messages, newMsg] : [newMsg];
+  try {
+    await db.collection('orders').doc(activeChatOrderId).update({ messages: updated });
+    input.value = '';
+  } catch (e) {
+    showMsg('فشل إرسال الرسالة');
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[m]));
+}
+</script>
+</body>
+</html>
