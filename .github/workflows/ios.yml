@@ -26,9 +26,13 @@ jobs:
           mkdir -p www
           cp abdalslam.index.html www/index.html
 
-      - name: Create Capacitor project
+      - name: Create Capacitor project & Config
         run: |
-          npx cap init "أفزع لي" "com.afzaalili.client" --web-dir www
+          echo '{
+            "appId": "com.afzaalili.client",
+            "appName": "AfzaaLi",
+            "webDir": "www"
+          }' > capacitor.config.json
           npx cap add ios
           npx cap sync ios
 
