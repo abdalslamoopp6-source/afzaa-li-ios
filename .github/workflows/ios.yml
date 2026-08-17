@@ -16,17 +16,17 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Capacitor
+      - name: Install Capacitor Dependencies
         run: |
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/ios
+          npm install --save @capacitor/core @capacitor/cli @capacitor/ios
 
       - name: Prepare web files
         run: |
           mkdir -p www
           cp abdalslam.index.html www/index.html
 
-      - name: Create Capacitor project & Config
+      - name: Create Capacitor Config & Add iOS
         run: |
           echo '{
             "appId": "com.afzaalili.client",
@@ -34,6 +34,8 @@ jobs:
             "webDir": "www"
           }' > capacitor.config.json
           npx cap add ios
+          # ضبط الحد الأدنى للإصدار ليدعم أيفون 12 وما فوق (iOS 14.0)
+          sed -i '' "s/platform :ios, .*/platform :ios, '14.0'/" ios/App/Podfile
           npx cap sync ios
 
       - name: Build iOS
