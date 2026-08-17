@@ -1,0 +1,48 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create package.json
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/ios
+
+      - name: Prepare web folder
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+
+      - name: Initialize Capacitor
+        run: |
+          npx cap init "أفزع لي" "com.afzaalili.client" --web-dir www
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Build iOS
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build
+
+      - name: Upload iOS project
+        uses: actions/upload-artifact@v4
+        with:
+          name: afzaa-li-ios-project
+          path: ios/
