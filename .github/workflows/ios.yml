@@ -19,7 +19,7 @@ jobs:
       - name: Install Capacitor Dependencies
         run: |
           npm init -y
-          npm install --save @capacitor/core @capacitor/cli @capacitor/ios
+          npm install --save @capacitor/core@6 @capacitor/cli@6 @capacitor/ios@6
 
       - name: Prepare web files
         run: |
@@ -34,19 +34,6 @@ jobs:
             "webDir": "www"
           }' > capacitor.config.json
           npx cap add ios
-          
-          # كتابة ملف Podfile جديد ومخصص يدعم أيفون 12 وما فوق (iOS 14.0) مباشرة
-          echo "require_relative '../../node_modules/@capacitor/ios/scripts/pods'
-
-          platform :ios, '14.0'
-          use_frameworks!
-
-          install! 'cocoapods', :disable_input_output_paths => true
-
-          target 'App' do
-            capacitor_pods
-          end" > ios/App/Podfile
-
           npx cap sync ios
 
       - name: Build iOS
